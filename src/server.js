@@ -87,7 +87,7 @@ app.put('/users/:id', async(req,res)=> {
   return res.status(404).send("Usuário não encontrado");
 })
 
-app.listen(port, () => {
+app.listen(process.env.PORT||port, () => {
   console.log(`App listening on http://localhost:${port}`)
 })
 
