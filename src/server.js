@@ -1,12 +1,27 @@
-import 'dotenv/config'
-import express from 'express'
+import 'dotenv/config';
+import express from 'express';
+import multer from 'multer';
+import crypto from 'crypto';
+import { extname } from 'path';
 
-import { authMiddleware } from './middlewares/authMiddleware.js'
-import {UserService} from './services/user-service.js'
-import jwt from 'jsonwebtoken'
+import { authMiddleware } from './middlewares/authMiddleware.js';
+import {UserService} from './services/user-service.js';
+import jwt from 'jsonwebtoken';
+import { ProductService } from './services/productService.js';
 
 const app = express()
 const port = 3000
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/');
+  },
+  filename: (req, file, cb)=>{
+    const newFileName = crypto.randomBytes(32).toString('hex');
+    const fileExtension = extname(file.originalname);
+    cb(null, `${newFileName}${fileExtension}`);
+  }
+});
+const uploadMidleWare = multer({storage})
 
 app.use(express.json())
 
@@ -20,14 +35,24 @@ app.post('/login', async (req, res)=> {
   const userLogged = await userService.login(email, password);
   if(userLogged){
     const secretKey= process.env.SECRET_KEY;
-    const token = jwt.sign({user: userLogged}, secretKey,{expiresIn:"3600s"})
+    const token = jwt.sign({user: userLogged}, secretKey,{expiresIn:"1d"})
   
     return res.status(200).json({token})
   }
     return res.status(400).json({message: 'email ou senha inválidos.'})
 });
 
+app.get('/products', async(req,res)=> {
+  const productService = new ProductService();
+  const products = await productService.findAll();
+  return res.status(200).json(products);
+})
+
+app.use('/uploads', express.static('uploads'))
+
 app.use(authMiddleware);
+
+app.use(express.urlencoded({extended:true}));
 
 app.post('/users', async (req,res)=>{
   console.log(req.body);
@@ -86,6 +111,20 @@ app.put('/users/:id', async(req,res)=> {
   }
   return res.status(404).send("Usuário não encontrado");
 })
+
+app.post('/products',uploadMidleWare.single('image'), async(req, res)=>{
+  const productService = new ProductService();
+  const {name, description, price, summary, stock}= req.body;
+  console.log(req.body);
+  console.log(req.file.filename);
+  const fileName =req.file.filename;
+  const product= {name, description, price, summary, stock, fileName}
+  await productService.create(product);
+  return res.status(201).json(product);
+
+})
+
+
 
 app.listen(process.env.PORT||port, () => {
   console.log(`App listening on http://localhost:${port}`)
